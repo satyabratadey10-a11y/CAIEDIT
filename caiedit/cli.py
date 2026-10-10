@@ -63,8 +63,10 @@ def main():
     parser = argparse.ArgumentParser(description="CAIEDIT: Autonomous AI Agentic Video & Audio Studio")
     parser.add_argument("--prompt", type=str, default="Make a viral phonk car edit synced on the bass drop", help="Creative instruction for the Director Agent")
     parser.add_argument("--audio", type=str, help="Path to reference audio (.mp3, .wav)")
-    parser.add_argument("--clips", nargs="+", help="Paths to raw video clips (.mp4, .mov)")
+    parser.add_argument("--clips", nargs="+", help="Paths to raw video clips (.mp4, .mov) or images (.jpg, .png)")
+    parser.add_argument("--images-dir", type=str, default="", help="Directory containing images to assemble into edit")
     parser.add_argument("--ref-video", type=str, default="", help="Optional viral reference video to clone cuts/velocity from")
+    parser.add_argument("--resources-dir", type=str, default="", help="Path to CAIEDIT Resources directory containing Images/, Ref/, Song/")
     parser.add_argument("--output", type=str, default="", help="Path for final rendered video")
     parser.add_argument("--demo", action="store_true", help="Run a self-contained end-to-end demo session")
 
@@ -86,18 +88,60 @@ def main():
         print(f"Output Video : {session.rendered_video_path}")
         return
 
-    if not args.audio or not args.clips:
-        print("❌ Error: Both --audio and --clips are required (or use --demo).")
+    # Handle --resources-dir auto-discovery
+    audio_path = args.audio
+    ref_video_path = args.ref_video
+    clips_list = []
+
+    if args.resources_dir and os.path.exists(args.resources_dir):
+        print(f"📂 [CAIEDIT] Auto-discovering assets in resources directory: {args.resources_dir}")
+        import glob
+        # 1. Discover Song
+        song_candidates = glob.glob(os.path.join(args.resources_dir, "Song", "*.*"))
+        if song_candidates:
+            audio_path = song_candidates[0]
+            print(f"  -> Discovered Song: {os.path.basename(audio_path)}")
+
+        # 2. Discover Ref Video
+        ref_candidates = glob.glob(os.path.join(args.resources_dir, "Ref", "*.*"))
+        if ref_candidates:
+            ref_video_path = ref_candidates[0]
+            print(f"  -> Discovered Reference Video: {os.path.basename(ref_video_path)}")
+
+        # 3. Discover Images
+        img_candidates = sorted(glob.glob(os.path.join(args.resources_dir, "Images", "*.*")))
+        if img_candidates:
+            clips_list.extend(img_candidates)
+            print(f"  -> Discovered {len(img_candidates)} Images")
+
+    if args.images_dir and os.path.exists(args.images_dir):
+        import glob
+        img_candidates = sorted(glob.glob(os.path.join(args.images_dir, "*.*")))
+        clips_list.extend(img_candidates)
+
+    if args.clips:
+        for c in args.clips:
+            if os.path.isdir(c):
+                import glob
+                clips_list.extend(sorted(glob.glob(os.path.join(c, "*.*"))))
+            else:
+                clips_list.append(c)
+
+    if not audio_path or not clips_list:
+        print("❌ Error: Audio and clips/images are required (or specify --resources-dir).")
         parser.print_help()
         sys.exit(1)
 
+    out_file = args.output or "workspace/output/caiedit_viral_result.mp4"
+
     harness.run(
         prompt=args.prompt,
-        audio_path=args.audio,
-        raw_clips=args.clips,
-        reference_video=args.ref_video,
-        output_path=args.output
+        audio_path=audio_path,
+        raw_clips=clips_list,
+        reference_video=ref_video_path,
+        output_path=out_file
     )
+
 
 if __name__ == "__main__":
     main()

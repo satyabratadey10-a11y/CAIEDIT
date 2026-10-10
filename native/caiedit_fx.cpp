@@ -197,4 +197,52 @@ void caiedit_motion_blur_blend(const uint8_t* f1, const uint8_t* f2, uint8_t* ds
     }
 }
 
+/**
+ * 6. High-Speed Bilinear Resizer
+ * Scales src (src_w x src_h) into dst (dst_w x dst_h) with smooth bilinear filtering.
+ */
+void caiedit_resize_bilinear(const uint8_t* src, int src_w, int src_h, uint8_t* dst, int dst_w, int dst_h) {
+    if (!src || !dst || src_w <= 0 || src_h <= 0 || dst_w <= 0 || dst_h <= 0) return;
+
+    float x_ratio = (src_w > 1) ? ((float)(src_w - 1) / (float)dst_w) : 0.0f;
+    float y_ratio = (src_h > 1) ? ((float)(src_h - 1) / (float)dst_h) : 0.0f;
+
+    for (int y = 0; y < dst_h; ++y) {
+        int sy = (int)(y_ratio * y);
+        float y_diff = (y_ratio * y) - sy;
+        int sy1 = std::min(sy + 1, src_h - 1);
+
+        int dst_row = y * dst_w * 3;
+        int src_row0 = sy * src_w * 3;
+        int src_row1 = sy1 * src_w * 3;
+
+        for (int x = 0; x < dst_w; ++x) {
+            int sx = (int)(x_ratio * x);
+            float x_diff = (x_ratio * x) - sx;
+            int sx1 = std::min(sx + 1, src_w - 1);
+
+            int dst_idx = dst_row + x * 3;
+            int a_idx = src_row0 + sx * 3;
+            int b_idx = src_row0 + sx1 * 3;
+            int c_idx = src_row1 + sx * 3;
+            int d_idx = src_row1 + sx1 * 3;
+
+            for (int c = 0; c < 3; ++c) {
+                float a = src[a_idx + c];
+                float b = src[b_idx + c];
+                float c_val = src[c_idx + c];
+                float d = src[d_idx + c];
+
+                float val = a * (1.0f - x_diff) * (1.0f - y_diff) +
+                            b * x_diff * (1.0f - y_diff) +
+                            c_val * y_diff * (1.0f - x_diff) +
+                            d * (x_diff * y_diff);
+
+                dst[dst_idx + c] = static_cast<uint8_t>(std::clamp(val, 0.0f, 255.0f));
+            }
+        }
+    }
+}
+
 } // extern "C"
+

@@ -31,6 +31,19 @@ _lib.caiedit_color_grade.restype = None
 _lib.caiedit_motion_blur_blend.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_float]
 _lib.caiedit_motion_blur_blend.restype = None
 
+_lib.caiedit_resize_bilinear.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int]
+_lib.caiedit_resize_bilinear.restype = None
+
+def resize_bilinear(src: np.ndarray, dst_w: int, dst_h: int) -> np.ndarray:
+    """Scales src frame to dst_w x dst_h using native C++ bilinear filtering."""
+    src_h, src_w, _ = src.shape
+    dst = np.empty((dst_h, dst_w, 3), dtype=np.uint8)
+    p_src = src.ctypes.data_as(ctypes.c_void_p)
+    p_dst = dst.ctypes.data_as(ctypes.c_void_p)
+    _lib.caiedit_resize_bilinear(p_src, src_w, src_h, p_dst, dst_w, dst_h)
+    return dst
+
+
 def rgb_split(frame: np.ndarray, shift_x: int) -> np.ndarray:
     """Applies chromatic aberration (RGB split) in-place."""
     if shift_x <= 0:
