@@ -16,9 +16,12 @@ class StudioSession:
     output_target: str = ""
 
     # Pipeline State
-    style_preset: str = "car_phonk_edit"
+    style_preset: str = "car_phonk_velocity"
     audio_analysis: Optional[Any] = None
+    visual_assets: List[Any] = field(default_factory=list)
     video_blueprint: Optional[Any] = None
+    cailang_script: str = ""
+    choreography_timeline: Optional[Any] = None
     vfx_render_plan: Dict[str, Any] = field(default_factory=dict)
     rendered_video_path: str = ""
     qa_report: Dict[str, Any] = field(default_factory=dict)

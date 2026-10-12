@@ -1,6 +1,6 @@
 """
 CAIEDIT Master Agentic Harness
-Coordinates the autonomous multi-agent studio swarm to produce viral videos.
+Coordinates the autonomous multi-agent studio swarm with CAI-Lang perceptual orchestration.
 """
 
 import time
@@ -17,11 +17,11 @@ class CAIEditHarness:
     """Master AI Studio Harness for Autonomous Video & Audio Production."""
 
     def __init__(self):
-        self.director = DirectorAgent()
-        self.sonic = SonicAgent()
-        self.optic = OpticAgent()
-        self.vfx = ViralVFXAgent()
-        self.qa = QAPolishAgent()
+        self.sonic = SonicAgent()       # The Ear (Multi-band audio perception)
+        self.optic = OpticAgent()       # The Eye (Semantic visual inspection)
+        self.director = DirectorAgent() # The Brain (CAI-Lang choreographer & compiler)
+        self.vfx = ViralVFXAgent()      # The Hands (C++ SIMD execution VM)
+        self.qa = QAPolishAgent()       # The Auditor (Quality & social optimization)
 
     def run(
         self,
@@ -31,7 +31,7 @@ class CAIEditHarness:
         reference_video: str = "",
         output_path: str = ""
     ) -> StudioSession:
-        """Executes the complete autonomous multi-agent editing workflow."""
+        """Executes the complete perceptual multi-agent editing workflow."""
         session_id = str(int(time.time()))
         
         session = StudioSession(
@@ -43,29 +43,29 @@ class CAIEditHarness:
             output_target=output_path or f"workspace/output/caiedit_render_{session_id}.mp4"
         )
 
-        session.log("CAIEDIT", "="*65)
-        session.log("CAIEDIT", f"🚀 STARTING AUTONOMOUS STUDIO SESSION: #{session_id}")
+        session.log("CAIEDIT", "="*68)
+        session.log("CAIEDIT", f"🚀 STARTING CAI-LANG PERCEPTUAL STUDIO SESSION: #{session_id}")
         session.log("CAIEDIT", f"Prompt: {prompt}")
-        session.log("CAIEDIT", "="*65)
+        session.log("CAIEDIT", "="*68)
 
-        # 1. Director Agent (Planning & DAG)
-        self.director.execute(session)
-
-        # 2. Sonic Agent (Audio Analysis & Transients)
+        # 1. Sonic Agent: "The Ear" listens to the song's musical soul & narrative
         self.sonic.execute(session)
 
-        # 3. Optic Agent (Video Reverse-Engineering & Cut Mapping)
+        # 2. Optic Agent: "The Eye" inspects and grades visual assets + reference cuts
         self.optic.execute(session)
 
-        # 4. Viral VFX Agent (Native C++ Assembly & Rendering)
+        # 3. Director Agent: "The Brain" writes & compiles the CAI-Lang choreography script
+        self.director.execute(session)
+
+        # 4. Viral VFX Agent: "The Hands" executes the CAILangVM with native C++ SIMD FX
         self.vfx.execute(session)
 
-        # 5. QA & Polish Agent (Audit & Social Metadata)
+        # 5. QA & Polish Agent: Audits output quality and formats social metadata
         self.qa.execute(session)
 
-        session.log("CAIEDIT", "="*65)
+        session.log("CAIEDIT", "="*68)
         session.log("CAIEDIT", f"🏁 ALL AGENTS COMPLETED SUCCESSFULLY!")
         session.log("CAIEDIT", f"Final Video: {session.rendered_video_path}")
-        session.log("CAIEDIT", "="*65)
+        session.log("CAIEDIT", "="*68)
 
         return session
