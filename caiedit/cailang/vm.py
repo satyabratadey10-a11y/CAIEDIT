@@ -1,6 +1,8 @@
 """
 CAI-Lang Virtual Machine (Execution Runtime)
 Executes a ChoreographyTimeline frame-by-frame with native C++ SIMD acceleration.
+Integrates Multi-Window Layouts (TRIPLE_CARD, HERO_CARD, FULLSCREEN), Typography Headers,
+and Modular Tool Tray (Particles, Shakes, Flashes).
 """
 
 import os
@@ -9,6 +11,7 @@ import subprocess
 import numpy as np
 from typing import Dict, List
 from caiedit.cailang.compiler import ChoreographyTimeline, ShotPlan
+from caiedit.vfx.layout_engine import LayoutEngine, LayoutSpec, HeaderOverlay
 from caiedit.bridge import fx_bridge
 
 class CAILangVM:
@@ -20,6 +23,7 @@ class CAILangVM:
         self.fps = fps
         self.frame_bytes = width * height * 3
         self._image_cache: Dict[str, np.ndarray] = {}
+        self.layout_engine = LayoutEngine(width=width, height=height)
 
     def _get_image(self, path: str) -> np.ndarray:
         """Loads and pre-scales an image into memory, caching it for instant re-use."""
@@ -100,20 +104,39 @@ class CAILangVM:
                 if not current_shot:
                     break
 
-                base_img = self._get_image(current_shot.asset_path)
+                # Prepare card images for this shot
+                card_paths = current_shot.card_assets or [current_shot.asset_path]
+                card_images = [self._get_image(p) for p in card_paths]
 
-                # Calculate smooth sub-pixel zoom progress
+                # Dynamic Ken Burns Zoom on primary card
                 shot_progress = min(1.0, max(0.0, (current_time - current_shot.start_sec) / max(0.05, current_shot.duration_sec)))
                 zoom = current_shot.zoom_start + (current_shot.zoom_end - current_shot.zoom_start) * shot_progress
-                crop_w = int(self.width / zoom)
-                crop_h = int(self.height / zoom)
-                x1 = (self.width - crop_w) // 2
-                y1 = (self.height - crop_h) // 2
+                if zoom > 1.001:
+                    base_primary = card_images[0]
+                    crop_w = int(self.width / zoom)
+                    crop_h = int(self.height / zoom)
+                    x1 = (self.width - crop_w) // 2
+                    y1 = (self.height - crop_h) // 2
+                    cropped = base_primary[y1:y1+crop_h, x1:x1+crop_w]
+                    card_images[0] = fx_bridge.resize_bilinear(np.ascontiguousarray(cropped), self.width, self.height)
 
-                cropped = base_img[y1:y1+crop_h, x1:x1+crop_w]
-                frame = fx_bridge.resize_bilinear(np.ascontiguousarray(cropped), self.width, self.height)
+                # Build Layout Specification
+                header_overlay = None
+                if current_shot.header_text:
+                    header_overlay = HeaderOverlay(text=current_shot.header_text)
 
-                # Apply active camera shake
+                layout_spec = LayoutSpec(
+                    mode=current_shot.layout_mode,
+                    bg_mode=current_shot.bg_mode,
+                    header=header_overlay,
+                    enable_particles=current_shot.enable_particles,  # Optional tool!
+                    particle_count=60
+                )
+
+                # 1. Compose Multi-Window Frame Canvas
+                frame = self.layout_engine.compose_frame(layout_spec, card_images, time_sec=current_time)
+
+                # 2. Apply Camera Shake (on Canvas)
                 if active_shake_frames > 0:
                     decay = active_shake_frames / float(max(1, current_shot.shake_decay_frames))
                     dx = int(random.uniform(-active_shake_mag, active_shake_mag) * decay)
@@ -121,21 +144,21 @@ class CAILangVM:
                     frame = fx_bridge.camera_shake(frame, dx=dx, dy=dy)
                     active_shake_frames -= 1
 
-                # Apply active white flash
+                # 3. Apply White Flash Impact
                 if active_flash_frames > 0:
                     decay = active_flash_frames / 12.0
                     intensity = active_flash_intensity * decay
                     fx_bridge.white_flash(frame, intensity=intensity)
                     active_flash_frames -= 1
 
-                # Apply active RGB split
+                # 4. Apply RGB Chromatic Glitch
                 if active_rgb_frames > 0:
                     decay = active_rgb_frames / 16.0
                     shift = int(active_rgb_shift * decay)
                     fx_bridge.rgb_split(frame, shift_x=shift)
                     active_rgb_frames -= 1
 
-                # Apply Phonk Color Grade
+                # 5. Apply Phonk Contrast & Saturation Color Grade
                 fx_bridge.color_grade(
                     frame,
                     contrast=current_shot.contrast,

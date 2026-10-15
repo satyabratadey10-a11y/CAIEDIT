@@ -244,5 +244,196 @@ void caiedit_resize_bilinear(const uint8_t* src, int src_w, int src_h, uint8_t* 
     }
 }
 
+/**
+ * 7. Fill Canvas Background (Solid Color)
+ */
+void caiedit_fill_canvas(uint8_t* dst, int width, int height, uint8_t r, uint8_t g, uint8_t b) {
+    if (!dst || width <= 0 || height <= 0) return;
+    int total_pixels = width * height;
+    for (int i = 0; i < total_pixels; ++i) {
+        int idx = i * 3;
+        dst[idx + 0] = b; // BGR format
+        dst[idx + 1] = g;
+        dst[idx + 2] = r;
+    }
+}
+
+/**
+ * 8. Blurred Backdrop Generator
+ * Scales src to fill canvas, applies dimming and fast horizontal/vertical box blur.
+ */
+void caiedit_blur_backdrop(const uint8_t* src, int src_w, int src_h, uint8_t* canvas, int canvas_w, int canvas_h, float dim_factor) {
+    if (!src || !canvas) return;
+
+    // First, scale src to canvas (using bilinear)
+    caiedit_resize_bilinear(src, src_w, src_h, canvas, canvas_w, canvas_h);
+
+    // Apply fast box blur (radius = 16) and dimming
+    int radius = 14;
+    int stride = canvas_w * 3;
+    uint8_t* temp = (uint8_t*)malloc(canvas_w * canvas_h * 3);
+    if (!temp) return;
+    memcpy(temp, canvas, canvas_w * canvas_h * 3);
+
+    float dim = std::clamp(dim_factor, 0.0f, 1.0f);
+
+    // Horizontal blur pass
+    for (int y = 0; y < canvas_h; ++y) {
+        int row_offset = y * stride;
+        for (int x = 0; x < canvas_w; ++x) {
+            int x_start = std::max(0, x - radius);
+            int x_end = std::min(canvas_w - 1, x + radius);
+            int count = x_end - x_start + 1;
+
+            int sum_b = 0, sum_g = 0, sum_r = 0;
+            for (int k = x_start; k <= x_end; ++k) {
+                int px = row_offset + k * 3;
+                sum_b += temp[px + 0];
+                sum_g += temp[px + 1];
+                sum_r += temp[px + 2];
+            }
+
+            int out_px = row_offset + x * 3;
+            canvas[out_px + 0] = static_cast<uint8_t>((sum_b / count) * dim);
+            canvas[out_px + 1] = static_cast<uint8_t>((sum_g / count) * dim);
+            canvas[out_px + 2] = static_cast<uint8_t>((sum_r / count) * dim);
+        }
+    }
+    free(temp);
+}
+
+/**
+ * 9. Multi-Window Card Blitter
+ * Scales a card image into target rect (dst_x, dst_y, dst_w, dst_h) on canvas,
+ * renders soft drop shadow, and crisp anti-aliased border.
+ */
+void caiedit_blit_card_window(
+    const uint8_t* card_img, int card_w, int card_h,
+    uint8_t* canvas, int canvas_w, int canvas_h,
+    int dst_x, int dst_y, int dst_w, int dst_h,
+    int border_w, uint8_t border_r, uint8_t border_g, uint8_t border_b,
+    int shadow_radius, float shadow_alpha
+) {
+    if (!card_img || !canvas || dst_w <= 0 || dst_h <= 0) return;
+
+    // 1. Render Drop Shadow around target rect
+    if (shadow_radius > 0 && shadow_alpha > 0.0f) {
+        int s_left = std::max(0, dst_x - shadow_radius);
+        int s_right = std::min(canvas_w, dst_x + dst_w + shadow_radius);
+        int s_top = std::max(0, dst_y - shadow_radius / 2);
+        int s_bottom = std::min(canvas_h, dst_y + dst_h + shadow_radius * 2);
+
+        float s_alpha = std::clamp(shadow_alpha, 0.0f, 1.0f);
+
+        for (int y = s_top; y < s_bottom; ++y) {
+            int row = y * canvas_w * 3;
+            for (int x = s_left; x < s_right; ++x) {
+                // If point is inside the card area, skip shadow (card will overwrite)
+                if (x >= dst_x && x < dst_x + dst_w && y >= dst_y && y < dst_y + dst_h) continue;
+
+                // Distance to card edge
+                int dx = (x < dst_x) ? (dst_x - x) : ((x >= dst_x + dst_w) ? (x - (dst_x + dst_w - 1)) : 0);
+                int dy = (y < dst_y) ? (dst_y - y) : ((y >= dst_y + dst_h) ? (y - (dst_y + dst_h - 1)) : 0);
+                float dist = std::sqrt((float)(dx * dx + dy * dy));
+
+                if (dist <= shadow_radius) {
+                    float factor = 1.0f - (dist / shadow_radius);
+                    float dark = 1.0f - (factor * s_alpha * 0.75f);
+                    int idx = row + x * 3;
+                    canvas[idx + 0] = static_cast<uint8_t>(canvas[idx + 0] * dark);
+                    canvas[idx + 1] = static_cast<uint8_t>(canvas[idx + 1] * dark);
+                    canvas[idx + 2] = static_cast<uint8_t>(canvas[idx + 2] * dark);
+                }
+            }
+        }
+    }
+
+    // 2. Scale card_img to temporary buffer (dst_w x dst_h)
+    uint8_t* scaled_card = (uint8_t*)malloc(dst_w * dst_h * 3);
+    if (!scaled_card) return;
+    caiedit_resize_bilinear(card_img, card_w, card_h, scaled_card, dst_w, dst_h);
+
+    // 3. Blit scaled card into canvas at (dst_x, dst_y)
+    for (int y = 0; y < dst_h; ++y) {
+        int cy = dst_y + y;
+        if (cy < 0 || cy >= canvas_h) continue;
+
+        int canvas_row = cy * canvas_w * 3;
+        int card_row = y * dst_w * 3;
+
+        for (int x = 0; x < dst_w; ++x) {
+            int cx = dst_x + x;
+            if (cx < 0 || cx >= canvas_w) continue;
+
+            int c_idx = canvas_row + cx * 3;
+            int s_idx = card_row + x * 3;
+
+            // Check if within border
+            bool is_border = (border_w > 0) && (x < border_w || x >= dst_w - border_w || y < border_w || y >= dst_h - border_w);
+
+            if (is_border) {
+                canvas[c_idx + 0] = border_b;
+                canvas[c_idx + 1] = border_g;
+                canvas[c_idx + 2] = border_r;
+            } else {
+                canvas[c_idx + 0] = scaled_card[s_idx + 0];
+                canvas[c_idx + 1] = scaled_card[s_idx + 1];
+                canvas[c_idx + 2] = scaled_card[s_idx + 2];
+            }
+        }
+    }
+    free(scaled_card);
+}
+
+/**
+ * 10. MODULAR FX TOOL: Optional Drifting Particles
+ * (Completely optional: only invoked when editor/user activates it)
+ */
+void caiedit_render_particles(uint8_t* frame, int width, int height, float time_sec, int count) {
+    if (!frame || count <= 0) return;
+
+    for (int i = 0; i < count; ++i) {
+        // Deterministic pseudo-random drifting physics
+        float seed = (float)(i * 1337 % 9999) / 9999.0f;
+        float speed = 25.0f + seed * 45.0f;
+        float radius = 3.0f + seed * 8.0f;
+
+        float x_pos = std::fmod((seed * width) + (std::sin(time_sec * 0.8f + seed * 6.28f) * 20.0f), (float)width);
+        float y_pos = std::fmod((height - (time_sec * speed + seed * height)), (float)height);
+        if (y_pos < 0.0f) y_pos += height;
+
+        int cx = (int)x_pos;
+        int cy = (int)y_pos;
+        int r_int = (int)radius;
+
+        float alpha = 0.35f + seed * 0.5f;
+
+        // Draw soft glowing disk
+        int y_min = std::max(0, cy - r_int);
+        int y_max = std::min(height - 1, cy + r_int);
+        int x_min = std::max(0, cx - r_int);
+        int x_max = std::min(width - 1, cx + r_int);
+
+        for (int y = y_min; y <= y_max; ++y) {
+            int row = y * width * 3;
+            for (int x = x_min; x <= x_max; ++x) {
+                int dx = x - cx;
+                int dy = y - cy;
+                float dist_sq = (float)(dx * dx + dy * dy);
+                if (dist_sq <= radius * radius) {
+                    float edge_soft = 1.0f - std::sqrt(dist_sq) / radius;
+                    float blend = alpha * edge_soft;
+                    int idx = row + x * 3;
+
+                    frame[idx + 0] = static_cast<uint8_t>(frame[idx + 0] * (1.0f - blend) + 255 * blend);
+                    frame[idx + 1] = static_cast<uint8_t>(frame[idx + 1] * (1.0f - blend) + 255 * blend);
+                    frame[idx + 2] = static_cast<uint8_t>(frame[idx + 2] * (1.0f - blend) + 255 * blend);
+                }
+            }
+        }
+    }
+}
+
 } // extern "C"
+
 

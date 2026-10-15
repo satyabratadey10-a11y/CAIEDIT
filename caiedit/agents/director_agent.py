@@ -27,7 +27,9 @@ class DirectorAgent(BaseAgent):
         cai_script = self.synthesizer.compose_script(
             audio=session.audio_analysis,
             assets=session.visual_assets,
-            ref_drop=ref_drop
+            ref_drop=ref_drop,
+            header_text=session.header_text,
+            enable_particles=session.enable_particles
         )
         session.cailang_script = cai_script
 

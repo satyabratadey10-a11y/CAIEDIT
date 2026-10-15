@@ -38,10 +38,18 @@ class QAPolishAgent(BaseAgent):
             desc = "Autonomous audio-visual cut sync with reactive bass camera shake."
             tags = ["#viral", "#velocity", "#edit", "#shorts", "#trending", "#fyp"]
 
+        # Probe resolution
+        res_str = "1080x1080"
+        try:
+            cmd = ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height", "-of", "csv=s=x:p=0", video_path]
+            res_str = subprocess.check_output(cmd).decode().strip()
+        except Exception:
+            pass
+
         session.qa_report = {
             "status": "PASSED",
             "file_size_mb": round(file_size_mb, 2),
-            "resolution": "1080x1920 (9:16 Vertical)",
+            "resolution": res_str,
             "frame_rate": 60,
             "av_sync_status": "LOCKED",
             "social_metadata": {

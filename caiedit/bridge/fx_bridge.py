@@ -89,3 +89,72 @@ def motion_blur_blend(f1: np.ndarray, f2: np.ndarray, alpha: float) -> np.ndarra
     pd = dst.ctypes.data_as(ctypes.c_void_p)
     _lib.caiedit_motion_blur_blend(p1, p2, pd, w, h, float(alpha))
     return dst
+
+# --- Multi-Window Layout & Canvas Blitters ---
+
+_lib.caiedit_fill_canvas.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8]
+_lib.caiedit_fill_canvas.restype = None
+
+_lib.caiedit_blur_backdrop.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+_lib.caiedit_blur_backdrop.restype = None
+
+_lib.caiedit_blit_card_window.argtypes = [
+    ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+    ctypes.c_void_p, ctypes.c_int, ctypes.c_int,
+    ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+    ctypes.c_int, ctypes.c_uint8, ctypes.c_uint8, ctypes.c_uint8,
+    ctypes.c_int, ctypes.c_float
+]
+_lib.caiedit_blit_card_window.restype = None
+
+_lib.caiedit_render_particles.argtypes = [ctypes.c_void_p, ctypes.c_int, ctypes.c_int, ctypes.c_float, ctypes.c_int]
+_lib.caiedit_render_particles.restype = None
+
+def fill_canvas(canvas: np.ndarray, r: int, g: int, b: int) -> np.ndarray:
+    """Fills canvas with solid RGB color in-place."""
+    h, w, _ = canvas.shape
+    ptr = canvas.ctypes.data_as(ctypes.c_void_p)
+    _lib.caiedit_fill_canvas(ptr, w, h, int(r), int(g), int(b))
+    return canvas
+
+def blur_backdrop(src: np.ndarray, canvas: np.ndarray, dim_factor: float = 0.35) -> np.ndarray:
+    """Renders a scaled, blurred, and dimmed background copy of src into canvas in-place."""
+    src_h, src_w, _ = src.shape
+    dst_h, dst_w, _ = canvas.shape
+    p_src = src.ctypes.data_as(ctypes.c_void_p)
+    p_dst = canvas.ctypes.data_as(ctypes.c_void_p)
+    _lib.caiedit_blur_backdrop(p_src, src_w, src_h, p_dst, dst_w, dst_h, float(dim_factor))
+    return canvas
+
+def blit_card_window(
+    card_img: np.ndarray,
+    canvas: np.ndarray,
+    dst_x: int, dst_y: int,
+    dst_w: int, dst_h: int,
+    border_w: int = 3,
+    border_rgb: tuple = (255, 255, 255),
+    shadow_radius: int = 15,
+    shadow_alpha: float = 0.6
+) -> np.ndarray:
+    """Blits an aspect-scaled card window into canvas with drop shadow and border."""
+    c_h, c_w, _ = card_img.shape
+    can_h, can_w, _ = canvas.shape
+    p_card = card_img.ctypes.data_as(ctypes.c_void_p)
+    p_can = canvas.ctypes.data_as(ctypes.c_void_p)
+    br, bg, bb = border_rgb
+    _lib.caiedit_blit_card_window(
+        p_card, c_w, c_h,
+        p_can, can_w, can_h,
+        int(dst_x), int(dst_y), int(dst_w), int(dst_h),
+        int(border_w), int(br), int(bg), int(bb),
+        int(shadow_radius), float(shadow_alpha)
+    )
+    return canvas
+
+def render_particles(frame: np.ndarray, time_sec: float, count: int = 60) -> np.ndarray:
+    """MODULAR FX TOOL: Drifts soft glowing particles across frame (completely optional)."""
+    h, w, _ = frame.shape
+    ptr = frame.ctypes.data_as(ctypes.c_void_p)
+    _lib.caiedit_render_particles(ptr, w, h, float(time_sec), int(count))
+    return frame
+

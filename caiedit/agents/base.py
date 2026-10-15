@@ -17,6 +17,8 @@ class StudioSession:
 
     # Pipeline State
     style_preset: str = "car_phonk_velocity"
+    header_text: str = "MY BEST PHOTOCARD"
+    enable_particles: bool = False
     audio_analysis: Optional[Any] = None
     visual_assets: List[Any] = field(default_factory=list)
     video_blueprint: Optional[Any] = None

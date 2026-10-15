@@ -29,7 +29,9 @@ class CAIEditHarness:
         audio_path: str,
         raw_clips: List[str],
         reference_video: str = "",
-        output_path: str = ""
+        output_path: str = "",
+        header_text: str = "MY BEST PHOTOCARD",
+        enable_particles: bool = False
     ) -> StudioSession:
         """Executes the complete perceptual multi-agent editing workflow."""
         session_id = str(int(time.time()))
@@ -40,7 +42,9 @@ class CAIEditHarness:
             reference_audio=audio_path,
             reference_video=reference_video,
             raw_footage_paths=raw_clips,
-            output_target=output_path or f"workspace/output/caiedit_render_{session_id}.mp4"
+            output_target=output_path or f"workspace/output/caiedit_render_{session_id}.mp4",
+            header_text=header_text,
+            enable_particles=enable_particles
         )
 
         session.log("CAIEDIT", "="*68)

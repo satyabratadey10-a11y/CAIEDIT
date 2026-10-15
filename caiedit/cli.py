@@ -67,6 +67,8 @@ def main():
     parser.add_argument("--images-dir", type=str, default="", help="Directory containing images to assemble into edit")
     parser.add_argument("--ref-video", type=str, default="", help="Optional viral reference video to clone cuts/velocity from")
     parser.add_argument("--resources-dir", type=str, default="", help="Path to CAIEDIT Resources directory containing Images/, Ref/, Song/")
+    parser.add_argument("--header", type=str, default="MY BEST PHOTOCARD", help="Header typography text overlay")
+    parser.add_argument("--particles", action="store_true", help="Enable optional particle/bokeh FX tool")
     parser.add_argument("--output", type=str, default="", help="Path for final rendered video")
     parser.add_argument("--demo", action="store_true", help="Run a self-contained end-to-end demo session")
 
@@ -98,13 +100,13 @@ def main():
         import glob
         # 1. Discover Song
         song_candidates = glob.glob(os.path.join(args.resources_dir, "Song", "*.*"))
-        if song_candidates:
+        if not audio_path and song_candidates:
             audio_path = song_candidates[0]
             print(f"  -> Discovered Song: {os.path.basename(audio_path)}")
 
         # 2. Discover Ref Video
         ref_candidates = glob.glob(os.path.join(args.resources_dir, "Ref", "*.*"))
-        if ref_candidates:
+        if not ref_video_path and ref_candidates:
             ref_video_path = ref_candidates[0]
             print(f"  -> Discovered Reference Video: {os.path.basename(ref_video_path)}")
 
@@ -139,9 +141,12 @@ def main():
         audio_path=audio_path,
         raw_clips=clips_list,
         reference_video=ref_video_path,
-        output_path=out_file
+        output_path=out_file,
+        header_text=args.header,
+        enable_particles=args.particles
     )
 
 
 if __name__ == "__main__":
     main()
+
